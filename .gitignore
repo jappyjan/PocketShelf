@@ -1,0 +1,15 @@
+.cache/
+build/
+.DS_Store
+
+# Generated distribution artifacts (installation notes remain tracked)
+dist/*
+!dist/INSTALL.txt
+
+# Credentials and device diagnostics
+.env
+.env.*
+!.env.example
+account.json
+last-run.log
+*.pem

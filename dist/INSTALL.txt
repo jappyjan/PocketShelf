@@ -1,0 +1,30 @@
+PocketShelf - native PocketBook library browser
+
+Copy the applications folder onto your reader, merging it with the existing
+applications folder. Safely eject, then open Apps > PocketShelf.
+
+When logged out, only the login form is shown. Edit Email and Password,
+then tap Sign in. After login, the main menu shows your email at the top right.
+Choose Search the library. Use the physical Back button to exit.
+Select a book, browse Description / Book info, tap Download [format], then Open in PocketBook reader.
+All documented Era Color ebook, image and audio formats are enabled, including MOBI.
+Search defaults to all formats; change the filter in Account & settings.
+
+Device diagnostics confirm successful login and 24-bit color mode.
+Downloading and native book opening have been verified on the reader.
+Native Library indexing and Cloud upload still need on-device verification.
+The default z-library.sk login endpoint now passes its cookie redirect handshake
+in an anonymous development probe; real login also succeeded on the reader.
+You can change the HTTPS library address on the login form. Errors are shown red
+and the app requests a 24-bit color framebuffer.
+
+Books: Books/PocketShelf/
+Session and startup log: system/config/pocketshelf/
+Password is not stored; the saved session token is accessible over USB.
+Sign out from Settings to forget it.
+
+If the app fails to start, reconnect by USB and retrieve
+system/config/pocketshelf/last-run.log.
+
+Inner pages have a Back button at the top left. The main menu keeps the
+current user at the top right and has no Close button.
