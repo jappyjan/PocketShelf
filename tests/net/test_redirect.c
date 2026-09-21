@@ -1,14 +1,20 @@
-#include <curl/curl.h>
-static const char *test_ca;
-static CURLcode trusted_test_perform(CURL *c);
-#define curl_easy_perform trusted_test_perform
-#include "../src/library.c"
-#undef curl_easy_perform
+#include "cJSON.h"
+#include "core/book.h"
+#include "core/text.h"
+#include "library/parser.h"
+#include "net/http.h"
+#include "storage/book_file.h"
 #include <assert.h>
-static CURLcode trusted_test_perform(CURL *c) {
-  curl_easy_setopt(c, CURLOPT_CAINFO, test_ca);
-  curl_easy_setopt(c, CURLOPT_NOPROXY, "localhost,127.0.0.1");
-  return curl_easy_perform(c);
+#include <curl/curl.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+static const char *test_ca;
+static int request(const Account *a, const char *url, const char *post,
+                   Sink *sink, int file, char *error, size_t cap) {
+  HttpOptions options = {.ca_file = test_ca, .no_proxy = "localhost,127.0.0.1"};
+  return http_request_configured(a, url, post, sink, file, error, cap,
+                                 &options);
 }
 int main(int argc, char **argv) {
   assert(argc == 3);

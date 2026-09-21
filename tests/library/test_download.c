@@ -1,23 +1,50 @@
-#include "../src/library.c"
+#include "cJSON.h"
+#include "core/book.h"
+#include "core/text.h"
+#include "library/client.h"
+#include "library/parser.h"
+#include "net/http.h"
+#include "storage/book_file.h"
 #include <assert.h>
+#include <curl/curl.h>
 #include <dirent.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
 static int calls, mode;
 static char payload[4096];
-static int fixture(const Account *a, const char *url, const char *post,
-                   Sink *sink, int file, char *error, size_t cap) {
+int http_request(const Account *a, const char *url, const char *post,
+                 Sink *sink, int file, char *error, size_t cap) {
   (void)a;
   calls++;
   if (file == 2) {
     assert(!strcmp(url, "https://covers.example.org/cover.png"));
     const unsigned char png[] = {137, 80, 78, 71, 13, 10, 26, 10};
-    return receive((void *)png, 1, sizeof(png), sink) == sizeof(png);
+    return sink_write((void *)png, 1, sizeof(png), sink) == sizeof(png);
   }
   if (post)
     snprintf(payload, sizeof(payload), "%s", post);
   const char *body = "";
   if (strstr(url, "/rpc.php"))
     body = "{\"response\":{\"user_id\":123,\"user_key\":\"session\"}}";
-  else if (strstr(url, "/search"))
+  else if (strstr(url, "/most-popular")) {
+    /* This endpoint returns one full collection, ignoring page/limit. */
+    cJSON *root = cJSON_CreateObject();
+    cJSON *books = cJSON_AddArrayToObject(root, "books");
+    for (int i = 0; i < 100; i++) {
+      cJSON *b = cJSON_CreateObject();
+      cJSON_AddNumberToObject(b, "id", i + 1);
+      cJSON_AddStringToObject(b, "hash", "abc");
+      cJSON_AddItemToArray(books, b);
+    }
+    char *json = cJSON_PrintUnformatted(root);
+    int ok = sink_write(json, 1, strlen(json), sink) == strlen(json);
+    free(json);
+    cJSON_Delete(root);
+    return ok;
+  } else if (strstr(url, "/search"))
     body = "{\"books\":[]}";
   else if (!file) {
     assert(strstr(url, "/eapi/book/123/abc/file"));
@@ -26,18 +53,18 @@ static int fixture(const Account *a, const char *url, const char *post,
   } else {
     assert(!strcmp(url, "https://files.example.org/book"));
     if (mode == 2) {
-      receive("PK\003\004partial", 1, 11, sink);
-      copy(error, cap, "Connection lost.");
+      sink_write("PK\003\004partial", 1, 11, sink);
+      text_copy(error, cap, "Connection lost.");
       return 0;
     }
     if (mode == 3) {
       unsigned char mobi[80] = {0};
       memcpy(mobi + 60, "BOOKMOBI", 8);
-      return receive(mobi, 1, sizeof(mobi), sink) == sizeof(mobi);
+      return sink_write(mobi, 1, sizeof(mobi), sink) == sizeof(mobi);
     }
     body = mode == 1 ? "<html>Please login</html>" : "PK\003\004testbook";
   }
-  return receive((void *)body, 1, strlen(body), sink) == strlen(body);
+  return sink_write((void *)body, 1, strlen(body), sink) == strlen(body);
 }
 static int entries(const char *dir) {
   DIR *d = opendir(dir);
@@ -52,7 +79,6 @@ static int entries(const char *dir) {
 }
 int main(void) {
   curl_global_init(CURL_GLOBAL_DEFAULT);
-  transport = fixture;
   Account a = {.base = "https://library.example.org"};
   Transfer t = {0};
   char err[512], path[PATH_CAP], second[PATH_CAP];
@@ -65,6 +91,9 @@ int main(void) {
   assert(strstr(payload, "message=a%20%26%20b"));
   assert(strstr(payload, "page=2"));
   assert(strstr(payload, "extensions%5B0%5D=epub"));
+  assert(library_search(&a, "", "", 1, 1, &r, &t, err, sizeof(err)));
+  assert(r.count == 100 && !r.has_more &&
+         "Popular must retain the entire collection without inventing page 2");
   char dir[] = "/tmp/pocketshelf-test-XXXXXX";
   assert(mkdtemp(dir));
   Book b = {.id = "123",

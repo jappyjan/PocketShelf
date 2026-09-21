@@ -30,9 +30,17 @@ void FillArea(int, int, int, int, int);
 #define EVT_SHOW 23
 #define EVT_KEYPRESS 25
 #define EVT_POINTERUP 29
+#define EVT_POINTERDOWN 30
+#define EVT_POINTERMOVE 31
+void SetClip(int, int, int, int);
+void PartialUpdate(int, int, int, int);
 #define IV_KEY_BACK 0x1b
 #define IV_KEY_NEXT 0x19
 #define IV_KEY_PREV 0x18
+#define IV_KEY_PREV2 0x1c
+#define IV_KEY_NEXT2 0x1d
+#define EVT_POINTERDRAG 44
+#define EVT_POINTERCANCEL 45
 void SetFont(const ifont *, int);
 char *DrawTextRect(int, int, int, int, const char *, int);
 void DrawRect(int, int, int, int, int);

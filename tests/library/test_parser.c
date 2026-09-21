@@ -1,5 +1,13 @@
-/* Include implementation to exercise bounded sinks and file validation too. */
-#include "../src/library.c"
+#include "cJSON.h"
+#include "core/book.h"
+#include "core/text.h"
+#include "library/parser.h"
+#include "net/http.h"
+#include "storage/book_file.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
 #include <assert.h>
 static int checks;
 #define CHECK(x)                                                               \
@@ -64,31 +72,33 @@ int main(void) {
   }
   char *data = cJSON_PrintUnformatted(root);
   CHECK(parse_books(data, &r, error, sizeof(error)));
-  CHECK(r.count == BOOKS_PER_PAGE && r.has_more);
+  CHECK(r.count == 20 &&
+        r.has_more); /* Never truncate a server response to UI page size. */
   free(data);
   cJSON_Delete(root);
   Transfer t = {0};
   Sink sink = {.transfer = &t, .limit = 5};
-  CHECK(receive("123", 1, 3, &sink) == 3);
-  CHECK(receive("456", 1, 3, &sink) == 0);
+  CHECK(sink_write("123", 1, 3, &sink) == 3);
+  CHECK(sink_write("456", 1, 3, &sink) == 0);
   CHECK(!strcmp(sink.data, "123"));
   free(sink.data);
-  CHECK(progress(&t, 100, 37, 0, 0) == 0 && transfer_percent(&t) == 37);
+  CHECK(transfer_progress(&t, 100, 37, 0, 0) == 0 &&
+        transfer_percent(&t) == 37);
   transfer_cancel(&t);
-  CHECK(progress(&t, 100, 40, 0, 0) == 1);
+  CHECK(transfer_progress(&t, 100, 40, 0, 0) == 1);
   FILE *f = tmpfile();
   CHECK(f != NULL);
   fwrite("<html>no book</html>", 1, 20, f);
-  CHECK(!file_signature(f, "epub") && !file_signature(f, "pdf"));
+  CHECK(!book_file_valid(f, "epub") && !book_file_valid(f, "pdf"));
   fclose(f);
   f = tmpfile();
   fwrite("%PDF-1.7", 1, 8, f);
-  CHECK(file_signature(f, "pdf"));
-  CHECK(!file_signature(f, "epub"));
+  CHECK(book_file_valid(f, "pdf"));
+  CHECK(!book_file_valid(f, "epub"));
   fclose(f);
   f = tmpfile();
   fwrite("PK\003\004xxxx", 1, 8, f);
-  CHECK(file_signature(f, "epub"));
+  CHECK(book_file_valid(f, "epub"));
   fclose(f);
   CHECK(supported_format("MOBI"));
   CHECK(supported_format("azw3") && supported_format("fb2.zip") &&
@@ -116,7 +126,7 @@ int main(void) {
   unsigned char mobi[80] = {0};
   memcpy(mobi + 60, "BOOKMOBI", 8);
   fwrite(mobi, 1, sizeof(mobi), f);
-  CHECK(file_signature(f, "MOBI") && file_signature(f, "azw3"));
+  CHECK(book_file_valid(f, "MOBI") && book_file_valid(f, "azw3"));
   fclose(f);
   puts("Library tests passed.");
   printf("%d checks\n", checks);

@@ -22,7 +22,7 @@ password from inside the email keyboard completion callback. The replacement
 uses an explicit sign-in form, edits one field per user action, and defers redraw
 until the keyboard callback has returned. A host-side InkView mock exercises the
 real UI callbacks and rejects nested keyboard openings, redraws during completion,
-and leaked pointer-up events. `scripts/test-signin.sh` failed against the original
+and leaked pointer-up events. `scripts/test-signin.sh` (now `scripts/test-ui.sh`) failed against the original
 flow and passes with the new form; on-device retesting is still required.
 
 The next hardware attempt cleared the password without a useful visible result.
@@ -64,3 +64,25 @@ a hardware check; startup logs include canvas depth for diagnosis.
 The connected device contained a completed EPUB in `Books/PocketShelf` but no matching folder/file in its `explorer-3` database (read-only inspection). The official SDK declares `BookPreparing` and `BookReady`. Its shipped InkView implementation sends a native task notification from BookReady. An independent native client also documents that the pair is required on some firmware: https://github.com/N-Combinator/inkshelf/blob/main/src/wifi_drop_ui.c. PocketShelf calls the SDK pair on the UI thread only after successful download completion, and re-announces earlier downloads on the first upgraded launch. No database writes or full-library resets are used.
 
 PocketBook documents native Auto upload/Autosync at https://pocketbook.de/en/faq-ebooks-hoerbuchdownloads and synchronization triggers at https://cloud.pocketbook.digital/browser/en/faq/synchronization. Both boolean settings were enabled on the connected reader. Registration is a request; hardware indexing and eventual Cloud upload must still be verified after running the new build.
+
+
+## Popular scrolling correction (2026-09-21)
+
+A read-only probe using the reader's saved session returned 100 popular books
+without pagination metadata. Requests for page 1 and page 2, both with limit 4,
+returned the same 100 IDs. The old parser retained only four; duplicate detection
+then stopped further fetching. Four 120-unit rows are shorter than the 630-unit
+viewport, so both swipes and page keys were clamped to offset zero, leaving unused
+space below them. The original UI fixture always returned distinct four-book
+pages and therefore missed the real endpoint behavior.
+
+The parser now retains complete responses as compact summaries. Popular is a
+single collection unless the server supplies pagination metadata; search retains
+background paging. A second live probe through the corrected `library_search`
+returned `retained_books=100 has_more=0 scrollable=1`. No book download was made.
+Tests replay the 100-book response through the real transport/parser seam and
+check that popular rows fill the viewport and respond to touch and page keys.
+Additional regressions cover SDK secondary page keys and `EVT_POINTERDRAG`, which
+the previous event handler ignored. All book browsers now share one list renderer
+and input/bounds implementation. Cover requests run independently of list data,
+limited to the visible area and the nearby prefetch region.
