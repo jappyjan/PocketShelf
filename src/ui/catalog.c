@@ -35,11 +35,14 @@ ScrollList active_list(App *app) {
 void draw_scroll_list(App *app, const char *title, const char *empty) {
   ScrollList list = active_list(app);
   int retry = app->screen == LIST && app->browser.failed;
-  text_at(24, 103,
-          app->screen == LOCAL ? 552
-          : retry              ? 280
-                               : 414,
-          46, title, app->ui.font);
+  if (app->screen == LOCAL && app->notice_is_error && app->notice[0])
+    text_color(24, 103, 552, 46, app->notice, app->ui.small, COLOR_ERROR);
+  else
+    text_at(24, 103,
+            app->screen == LOCAL ? 552
+            : retry              ? 280
+                                 : 414,
+            46, title, app->ui.font);
   if (app->screen == LIST) {
     if (retry)
       button(&app->ui, 320, 96, 124, 48, "Retry", ACTION_RETRY);

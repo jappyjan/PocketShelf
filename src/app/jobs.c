@@ -86,8 +86,8 @@ void jobs_poll(App *app) {
     app->notice_is_error = !registered;
     snprintf(app->notice, sizeof(app->notice), "%s",
              registered
-                 ? "Book saved. Library update requested. Tap Open to read."
-                 : "Book saved, but could not hand it to the Library. Try "
+                 ? "Book saved. Library scan requested. Tap Open to read."
+                 : "Book saved, but could not start a Library scan. Try "
                    "Refresh downloads in settings.");
     app->screen = DETAIL;
   }

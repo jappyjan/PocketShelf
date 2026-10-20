@@ -34,10 +34,11 @@ void test_books(App *app) {
   char handoff_path[] = "/tmp/pocketshelf-handoff-XXXXXX";
   int handoff_fd = mkstemp(handoff_path);
   assert(handoff_fd >= 0);
-  assert(!register_book(handoff_path) && mock_ui.handoff_count == 0);
+  mock_ui.scanner_task = 42;
+  assert(!register_book(handoff_path) && mock_ui.scan_requests == 0);
   assert(write(handoff_fd, "book", 4) == 4);
   close(handoff_fd);
-  assert(register_book(handoff_path) && mock_ui.handoff_count == 1);
+  assert(register_book(handoff_path) && mock_ui.scan_requests == 1);
   memset(&app->foreground.job, 0, sizeof(app->foreground.job));
   app->foreground.job.type = DOWNLOAD;
   app->foreground.job.done = 1;
@@ -46,7 +47,7 @@ void test_books(App *app) {
   assert(
       !pthread_create(&app->foreground.thread, NULL, completed_worker, NULL));
   jobs_poll(app);
-  assert(mock_ui.handoff_count == 1 && app->notice_is_error);
+  assert(mock_ui.scan_requests == 1 && app->notice_is_error);
   app->foreground.job.ok = 1;
   snprintf(app->foreground.job.path, sizeof(app->foreground.job.path), "%s",
            handoff_path);
@@ -54,11 +55,49 @@ void test_books(App *app) {
   assert(
       !pthread_create(&app->foreground.thread, NULL, completed_worker, NULL));
   jobs_poll(app);
-  assert(mock_ui.handoff_count == 2 && !app->notice_is_error &&
+  assert(mock_ui.scan_requests == 2 && !app->notice_is_error &&
          !strcmp(app->opened, handoff_path));
-  app->opened[0] = 0;
+  app_action(app, ACTION_OPEN);
+  assert(mock_ui.reader_launches == 1 &&
+         "Opening a completed download must launch a reader, not route back "
+         "to PocketShelf as seen in the Neuromancer device log");
+  assert(!mock_ui.handoff_count && !mock_ui.reader_book[0]);
+  mock_ui.scanner_task = 0;
+  assert(register_book(handoff_path) && mock_ui.scanner_launches == 1);
+  mock_ui.scan_fail = 1;
+  assert(!register_book(handoff_path));
+  mock_ui.scanner_task = 42;
+  assert(!register_book(handoff_path));
+  mock_ui.scan_fail = 0;
+  /* A scanner failure must still leave the completed book available to Open. */
+  mock_ui.scan_fail = 1;
+  app->foreground.active = 1;
+  assert(
+      !pthread_create(&app->foreground.thread, NULL, completed_worker, NULL));
+  jobs_poll(app);
+  assert(app->notice_is_error && strstr(mock_ui.drawn, "could not start") &&
+         !strcmp(app->opened, handoff_path));
+  mock_ui.scan_fail = 0;
+  app_action(app, ACTION_OPEN);
+  assert(mock_ui.reader_launches == 2);
+  mock_ui.open_result = -1;
+  app_action(app, ACTION_OPEN);
+  assert(app->notice_is_error && strstr(mock_ui.drawn, "Could not open"));
+  assert(mock_ui.reader_launches == 2);
+  mock_ui.open_result = 0;
+  int calls = mock_ui.open_calls;
+  app->screen = LOCAL;
+  app->downloads.count = 1;
+  strcpy(app->downloads.names[0], "missing.epub");
+  app_action(app, LOCAL_ACTION);
+  assert(app->notice_is_error && strstr(mock_ui.drawn, "Could not open") &&
+         mock_ui.open_calls == calls);
+  app->screen = DETAIL;
   unlink(handoff_path);
-  assert(!register_book(handoff_path) && mock_ui.handoff_count == 2);
+  app_action(app, ACTION_OPEN);
+  assert(app->notice_is_error && mock_ui.open_calls == calls);
+  app->opened[0] = 0;
+  assert(!register_book(handoff_path));
   app->screen = DETAIL;
   strcpy(app->selected.format, "mobi");
   strcpy(app->selected.title, "1984");

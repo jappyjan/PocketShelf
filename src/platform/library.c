@@ -4,15 +4,41 @@
 #include "storage/paths.h"
 #include <stdio.h>
 #include <sys/stat.h>
-int register_book(const char *path) {
+static int saved_book(const char *path) {
   struct stat st;
-  if (stat(path, &st) != 0 || !S_ISREG(st.st_mode) || st.st_size <= 0)
+  return path && *path && stat(path, &st) == 0 && S_ISREG(st.st_mode) &&
+         st.st_size > 0;
+}
+
+int register_book(const char *path) {
+  if (!saved_book(path))
     return 0;
-  BookPreparing(path);
-  BookReady(path);
-  fprintf(stderr, "[pocketshelf] library_handoff_requested=1\n");
+  /* BookPreparing/BookReady are reader lifecycle calls: both associate the
+     current task with the book. Calling them here makes OpenBook find
+     PocketShelf itself. Ask the firmware scanner to index saved files instead. */
+  int scanner = FindTaskByAppName("scanner.app");
+  int ok;
+  if (scanner > 0)
+    ok = SendEventTo(scanner, EVT_STARTSCAN, 0, 0) > 0;
+  else {
+    const char *args[] = {SYSTEMSCANNER, NULL};
+    ok = NewTask(SYSTEMSCANNER, args, "scanner.app", "Library scanner", NULL,
+                 TASK_BACKGROUND) > 0;
+  }
+  fprintf(stderr, "[pocketshelf] library_scan_requested=%d\n", ok);
   fflush(stderr);
-  return 1;
+  return ok;
+}
+
+int open_book(const char *path) {
+  if (!saved_book(path)) {
+    fprintf(stderr, "[pocketshelf] reader_open_missing_file=1\n");
+    return 0;
+  }
+  int result = OpenBook(path, "r", 0);
+  fprintf(stderr, "[pocketshelf] reader_open_result=%d\n", result);
+  fflush(stderr);
+  return result >= 0;
 }
 void repair_library(App *app) {
   if (!app->repair_dir)
@@ -29,14 +55,18 @@ void repair_library(App *app) {
     if (snprintf(path, sizeof(path), "%s/%s", BOOK_DIR, e->d_name) >=
         (int)sizeof(path))
       continue;
-    if (register_book(path)) {
-      /* BookReady posts to the native library. Space announcements out so
-         the firmware can consume each path before the next notification. */
-      runtime_schedule(app, TIMER_REPAIR, 1000);
-      return;
+    if (saved_book(path)) {
+      /* One native scan covers the entire folder, including older downloads. */
+      int ok = register_book(path);
+      closedir(app->repair_dir);
+      app->repair_dir = NULL;
+      if (!ok)
+        return; /* Leave the marker absent so the next launch retries. */
+      break;
     }
   }
-  closedir(app->repair_dir);
+  if (app->repair_dir)
+    closedir(app->repair_dir);
   app->repair_dir = NULL;
   FILE *marker = fopen(INDEX_REPAIR_MARKER, "w");
   if (marker)

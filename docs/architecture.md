@@ -14,7 +14,7 @@ or UI. `main.c` creates the application state and starts the platform runtime.
 | `storage/` | Session persistence, local-book discovery, file signatures, device paths | UI state or network requests |
 | `app/` | Navigation, actions, keyboard flow, foreground jobs, browsing/prefetch | Drawing primitives, HTTPS implementation |
 | `ui/` | Screen rendering, reusable widgets, list layout and hitboxes | HTTP requests or persistence |
-| `platform/` | InkView callback/timer adaptation, native Library handoff | Library protocol |
+| `platform/` | InkView callback/timer adaptation, native Library scans and reader launch | Library protocol |
 
 The library client calls the `http_request` interface. Production links the
 libcurl adapter; download tests link a fixture adapter with the same interface.
@@ -34,7 +34,7 @@ there are no process-wide UI state variables.
 InkView callbacks do not take a context parameter. `platform/runtime.c` holds the
 single active `App` pointer and translates those callbacks into context-taking
 application functions. That is the only active-app binding. All navigation,
-rendering, timers, file registration and view-state mutation run on the UI thread.
+rendering, timers, Library scan requests and view-state mutation run on the UI thread.
 
 Each worker receives an immutable request snapshot in its own job. The worker
 writes only its result and transfer progress. Completion is published under the
@@ -66,7 +66,7 @@ Run `./scripts/test.sh` for all sanitizer-enabled host tests, or
 `./scripts/test-ui.sh` for the app regressions. Tests are grouped into `app/`,
 `library/`, `net/` and `storage/`; shared fixtures live in `tests/support/`.
 Existing regressions cover sign-in/navigation, keyboard teardown, native Library
-handoff, detail text, infinite scrolling, Popular's 100-book response, stale
+scan requests and reader launch, detail text, infinite scrolling, Popular's 100-book response, stale
 requests, download cleanup and HTTPS redirects. Storage tests exercise session
 round trips, permissions and supported-file discovery in temporary directories.
 

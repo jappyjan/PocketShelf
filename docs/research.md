@@ -86,3 +86,35 @@ Additional regressions cover SDK secondary page keys and `EVT_POINTERDRAG`, whic
 the previous event handler ignored. All book browsers now share one list renderer
 and input/bounds implementation. Cover requests run independently of list data,
 limited to the visible area and the nearby prefetch region.
+
+
+## Neuromancer reader handoff correction (2026-10-20)
+
+The connected Era Color's `last-run.log` records a successful EPUB download,
+followed by repeated `OpenBook` attempts that find task `5928.0`, PocketShelf's
+own PID, and fail reader IPC requests (`type = 0x50e`). The file exists as
+`Books/PocketShelf/Neuromancer-16995536-JqrCuZ.epub` (821,453 bytes). Its ZIP
+members pass CRC validation and its mimetype is `application/epub+zip`. A
+read-only query of `explorer-3.db` finds the older PocketShelf downloads but
+no Neuromancer entry. The download succeeded; opening and indexing failed.
+
+The earlier BookPreparing/BookReady integration above was incorrect. Inspection
+of the official SDK's shipped `libinkview.so` shows both functions calling
+`SetSubtaskInfo(GetCurrentTask(), 0, ..., path)`. BookReady then sends
+`EVT_SCANSTOPPED` to `bookshelf.app`; it does not request a scan or add the file
+to the Library. This also makes subsequent OpenBook calls find PocketShelf as
+the book's reader. See the [official SDK](https://github.com/pocketbook/SDK_6.3.0/tree/6.5/SDK-B288)
+and its [InkView API](https://github.com/pocketbook/SDK_6.3.0/blob/6.5/SDK-B288/usr/arm-obreey-linux-gnueabi/sysroot/usr/local/include/inkview.h).
+
+The platform adapter now requests `EVT_STARTSCAN` from `scanner.app`, starting
+the system scanner as a background task if absent. Existing downloads receive
+one scan on the first upgraded launch, using a new marker so the previous
+handoff marker cannot skip the repair. The firmware owns indexing; accepting
+a scan request does not establish completed indexing or Cloud upload.
+
+The host InkView fixture now models the SDK's task/book association.
+`./scripts/test-ui.sh` failed before the fix because Open after successful
+download completion did not launch a reader. The same regression passes after
+the fix, alongside scan startup/failure and visible errors for missing files
+and rejected OpenBook calls. These fixtures cannot verify on-device scanning
+or reader rendering; both require retesting after USB disconnect.

@@ -116,8 +116,12 @@ void app_action(App *app, int action) {
   else if (action == ACTION_TEXT_NEXT && app->detail.more)
     app->detail.page++;
   else if (action == ACTION_OPEN && app->opened[0]) {
-    OpenBook(app->opened, "r", 0);
-    return;
+    if (open_book(app->opened))
+      return;
+    app->notice_is_error = 1;
+    snprintf(app->notice, sizeof(app->notice),
+             "Could not open the saved book. Check Downloaded books or try "
+             "the PocketBook Library.");
   } else if (app->screen == LIST && action >= BOOK_ACTION &&
              action < BOOK_ACTION + app->browser.count) {
     app->selected = browser_book(app, action - BOOK_ACTION);
@@ -132,8 +136,11 @@ void app_action(App *app, int action) {
     char p[PATH_CAP];
     snprintf(p, sizeof(p), "%s/%s", BOOK_DIR,
              app->downloads.names[action - LOCAL_ACTION]);
-    OpenBook(p, "r", 0);
-    return;
+    if (open_book(p))
+      return;
+    app->notice_is_error = 1;
+    snprintf(app->notice, sizeof(app->notice),
+             "Could not open the saved book. Try the PocketBook Library.");
   }
   app_render(app);
   browser_prefetch(app);

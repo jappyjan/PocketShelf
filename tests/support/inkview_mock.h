@@ -12,6 +12,9 @@ typedef struct {
   char *keyboard_buffer;
   void (*pending_timer)(void);
   char drawn[16384];
+  char reader_book[PATH_CAP];
+  int reader_launches, open_calls, open_result;
+  int scanner_task, scan_fail, scan_requests, scanner_launches;
 } MockInkView;
 extern MockInkView mock_ui;
 

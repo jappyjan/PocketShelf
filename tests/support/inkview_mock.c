@@ -7,11 +7,37 @@
 #include <time.h>
 #include <unistd.h>
 MockInkView mock_ui;
+int FindTaskByAppName(const char *name) {
+  assert(!strcmp(name, "scanner.app"));
+  assert(pthread_equal(pthread_self(), mock_ui.ui_thread));
+  return mock_ui.scanner_task;
+}
+
+int SendEventTo(int task, int event, int p1, int p2) {
+  assert(task > 0 && task == mock_ui.scanner_task);
+  assert(event == EVT_STARTSCAN && !p1 && !p2);
+  assert(pthread_equal(pthread_self(), mock_ui.ui_thread));
+  mock_ui.scan_requests++;
+  return !mock_ui.scan_fail;
+}
+
+int NewTask(const char *path, const char *const args[], const char *appname,
+            const char *name, const ibitmap *icon, unsigned int flags) {
+  assert(!strcmp(path, SYSTEMSCANNER) && !strcmp(args[0], SYSTEMSCANNER));
+  assert(!args[1] && !strcmp(appname, "scanner.app") && name && !icon);
+  assert(flags == TASK_BACKGROUND);
+  assert(pthread_equal(pthread_self(), mock_ui.ui_thread));
+  mock_ui.scanner_launches++;
+  mock_ui.scan_requests++;
+  return mock_ui.scan_fail ? -1 : 42;
+}
+
 void BookPreparing(const char *p) {
   assert(p && *p);
   assert(pthread_equal(pthread_self(), mock_ui.ui_thread));
   assert(!mock_ui.handoff_pending);
   mock_ui.handoff_pending = 1;
+  snprintf(mock_ui.reader_book, sizeof(mock_ui.reader_book), "%s", p);
 }
 
 void BookReady(const char *p) {
@@ -20,6 +46,9 @@ void BookReady(const char *p) {
   assert(mock_ui.handoff_pending);
   mock_ui.handoff_pending = 0;
   mock_ui.handoff_count++;
+  /* SDK BookReady also calls SetSubtaskInfo(current_task, 0, title, p).
+     OpenBook subsequently finds this task instead of launching a reader. */
+  snprintf(mock_ui.reader_book, sizeof(mock_ui.reader_book), "%s", p);
 }
 
 void SetFont(const ifont *f, int c) {
@@ -133,10 +162,12 @@ int NetConnect2(const char *name, int hourglass) {
 }
 
 int OpenBook(const char *path, const char *p, int flags) {
-  (void)path;
   (void)p;
   (void)flags;
-  return 0;
+  mock_ui.open_calls++;
+  if (strcmp(path, mock_ui.reader_book) && mock_ui.open_result >= 0)
+    mock_ui.reader_launches++;
+  return mock_ui.open_result;
 }
 
 ifont *OpenFont(const char *name, int size, int aa) {

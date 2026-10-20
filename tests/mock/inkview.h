@@ -14,6 +14,8 @@ void DrawBitmapRect(int, int, int, int, const ibitmap *, int);
 int StringWidth(const char *);
 #define BLACK 0
 #define TASK_MAKEACTIVE (1 << 7)
+#define TASK_BACKGROUND 37
+#define SYSTEMSCANNER "/ebrmain/bin/scanner.app"
 #define TASK_FB_RGB24 (1 << 20)
 typedef struct {
   int depth;
@@ -27,6 +29,7 @@ void FillArea(int, int, int, int, int);
 #define KBD_PASSWORD 0x100
 #define EVT_INIT 21
 #define EVT_EXIT 22
+#define EVT_STARTSCAN 215
 #define EVT_SHOW 23
 #define EVT_KEYPRESS 25
 #define EVT_POINTERUP 29
@@ -56,6 +59,10 @@ void ClearTimer(void (*)(void));
 int NetConnect2(const char *, int);
 void BookPreparing(const char *);
 void BookReady(const char *);
+int FindTaskByAppName(const char *);
+int SendEventTo(int, int, int, int);
+int NewTask(const char *, const char *const[], const char *, const char *,
+            const ibitmap *, unsigned int);
 int OpenBook(const char *, const char *, int);
 ifont *OpenFont(const char *, int, int);
 void CloseFont(ifont *);
